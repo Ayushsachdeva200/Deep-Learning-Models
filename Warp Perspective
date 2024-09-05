@@ -1,0 +1,104 @@
+import cv2
+import numpy as np
+
+# Initialize variables
+circles = np.zeros((4, 2), dtype=int)  # Array to store four (x, y) points
+counter = 0  # Counter to keep track of the number of points selected
+
+def mousePointer(event, x, y, flags, param):
+    """
+    Mouse callback function to capture points on mouse click.
+    Left-click to select points.
+    """
+    global counter, circles
+    if event == cv2.EVENT_LBUTTONDOWN:
+        if counter < 4:
+            circles[counter] = (x, y)
+            counter += 1
+            print(f"Point {counter}: ({x}, {y})")
+            print("Current points:", circles[:counter])
+        else:
+            print("Already have four points. Press 'r' to reset and select new points.")
+
+# Initialize video capture (0 for default webcam)
+cap = cv2.VideoCapture(0)
+
+# Check if the webcam is opened correctly
+if not cap.isOpened():
+    print("Cannot open camera")
+    exit()
+
+# Create a window and set the mouse callback
+cv2.namedWindow("Live Video")
+cv2.setMouseCallback("Live Video", mousePointer)
+
+# Define the width and height for the output perspective transform
+width, height = 250, 350
+
+# Initialize variables for transformation
+matrix = None
+imgOutput = None
+
+print("Instructions:")
+print("1. Click four points on the video window to define the perspective transform.")
+print("2. Press 'r' to reset the points and select new ones.")
+print("3. Press 'q' to quit the application.")
+
+while True:
+    # Capture frame-by-frame
+    ret, frame = cap.read()
+
+    # If frame is not read correctly, exit the loop
+    if not ret:
+        print("Can't receive frame (stream end?). Exiting ...")
+        break
+
+    # Make a copy of the frame to display circles
+    display_frame = frame.copy()
+
+    # Draw the selected circles on the frame
+    for i in range(counter):
+        cv2.circle(display_frame, (int(circles[i][0]), int(circles[i][1])), 5, (0, 0, 255), cv2.FILLED)
+        cv2.putText(display_frame, f"P{i+1}", (int(circles[i][0])+10, int(circles[i][1])+10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
+    # Show the original video with selected points
+    cv2.imshow("Live Video", display_frame)
+
+    # If four points are selected, perform the perspective transform
+    if counter == 4:
+        # Define source and destination points for the transform
+        pts1 = np.float32(circles)
+        pts2 = np.float32([[0, 0], [width, 0], [0, height], [width, height]])
+
+        # Compute the perspective transformation matrix
+        try:
+            matrix = cv2.getPerspectiveTransform(pts1, pts2)
+            # Apply the warp perspective to get the transformed image
+            imgOutput = cv2.warpPerspective(frame, matrix, (width, height))
+            # Display the transformed image in a separate window
+            cv2.imshow("Transformed Output", imgOutput)
+        except cv2.error as e:
+            print("Error in perspective transform:", e)
+            # Reset counter to allow re-selection
+            counter = 0
+            circles = np.zeros((4, 2), dtype=int)
+
+    # Wait for keypress
+    key = cv2.waitKey(1) & 0xFF
+
+    if key == ord('q'):
+        # Quit the application
+        break
+    elif key == ord('r'):
+        # Reset the selected points
+        circles = np.zeros((4, 2), dtype=int)
+        counter = 0
+        # Close the transformed output window if it's open
+        if cv2.getWindowProperty("Transformed Output", cv2.WND_PROP_VISIBLE) >= 1:
+            cv2.destroyWindow("Transformed Output")
+        print("Points have been reset. Select four new points.")
+
+# When everything done, release the capture and destroy windows
+cap.release()
+cv2.destroyAllWindows()
